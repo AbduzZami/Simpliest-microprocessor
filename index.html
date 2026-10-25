@@ -441,12 +441,12 @@ function chip(o){
   return `<g class="chip${go?' go':''}${id?isA(id):''}"${go?` data-go="${go}" tabindex="0" role="button" aria-label="Open ${esc(label)}"`:''}><rect class="body" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><circle class="notch" cx="${x+11}" cy="${y+11}" r="3.5"/>${T(x+w/2,ly,label,'lbl','middle')}${subs.map((s,k)=>T(x+w/2,ly+18+k*16,s,'sub','middle')).join('')}${go?T(x+w-8,y+h-7,'OPEN ›','go-hint','end'):''}${np?T(x+w-8,y+14,np+' pins','go-hint','end'):''}${legs}</g>`;
 }
 function gate(type,x,y,n,out){
-  const h=Math.max(40,n*16),base=type==='NAND'?'AND':type;let d,ox,extra='',inset=0;
+  const h=Math.max(40,n*16),base=type==='NAND'?'AND':type==='NOR'?'OR':type==='XNOR'?'XOR':type;let d,ox,extra='',inset=0;
   if(base==='AND'){d=`M${x},${y}h28a${h/2},${h/2} 0 0 1 0,${h}h-28Z`;ox=x+28+h/2}
   else if(base==='OR'||base==='XOR'){d=`M${x},${y}Q${x+14},${y+h/2} ${x},${y+h}Q${x+36},${y+h} ${x+54},${y+h/2}Q${x+36},${y} ${x},${y}Z`;ox=x+54;inset=5;
     if(base==='XOR'){extra=`<path class="xb" d="M${x-8},${y}Q${x+6},${y+h/2} ${x-8},${y+h}"/>`;inset=-4}}
   else{d=`M${x},${y+h/2-14}L${x+28},${y+h/2}L${x},${y+h/2+14}Z`;ox=x+28}
-  let bub='';if(type==='NOT'||type==='NAND'){bub=`<circle cx="${ox+4}" cy="${y+h/2}" r="4"/>`;ox+=8}
+  let bub='';if(type==='NOT'||type==='NAND'||type==='NOR'||type==='XNOR'){bub=`<circle cx="${ox+4}" cy="${y+h/2}" r="4"/>`;ox+=8}
   const ins=[];if(type==='NOT')ins.push([x,y+h/2]);else for(let k=0;k<n;k++)ins.push([x+inset,+(y+h*(k+1)/(n+1)).toFixed(1)]);
   const lbl=type==='NOT'?'':T(x+(base==='AND'?20:24),y+h/2+3,type,'gl','middle');
   return {svg:`<g class="gate${out?' hi':''}"><path d="${d}"/>${extra}${bub}${lbl}</g>`,ins,out:[ox,y+h/2],h};
