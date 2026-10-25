@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simple Microprocessor Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=Hind+Siliguri:wght@400;500;600&display=swap">
+<style>
+/* Layout: schematic workbench — big drill-down viewer left, program/registers rail right, ISA legend below */
+:root{
+  --bg:#e8ecf0; --panel:#f9fafb; --panel2:#f0f3f6; --ink:#16202a; --muted:#5a6876; --line:#cdd5dd; --grid:#d3dae1;
+  --chip:#23303c; --chip-ink:#eef3f7; --chip-sub:#a3b5c6; --chip-edge:#3a4a59;
+  --hi:#d4720a; --hi-soft:#f6dfc4; --lo:#9ba8b5; --accent:#0d686a; --accent-ink:#ffffff;
+  --f-op:#ad3680; --f-rd:#1b7752; --f-rs:#2863a6; --f-x:#87909a;
+  --p-in:#3a6fd0; --p-out:#249158; --p-ctl:#8a52c8; --p-op:#c8382a;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans Condensed","Hind Siliguri",system-ui,sans-serif;
+  --bn:"Hind Siliguri","Noto Sans Bengali",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10151b; --panel:#171f28; --panel2:#1c2530; --ink:#dce4ec; --muted:#8a99a8; --line:#2a3542; --grid:#1d2630;
+  --chip:#2a3643; --chip-ink:#eef3f7; --chip-sub:#97aabd; --chip-edge:#41525f;
+  --hi:#f3a23e; --hi-soft:#4a3418; --lo:#4b5967; --accent:#3cb3ad; --accent-ink:#0a1416;
+  --f-op:#e27fc0; --f-rd:#52c495; --f-rs:#6ea8ec; --f-x:#7e8791; --p-in:#6f9cf0; --p-out:#4fcb88; --p-ctl:#b48af0; --p-op:#f0705f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10151b; --panel:#171f28; --panel2:#1c2530; --ink:#dce4ec; --muted:#8a99a8; --line:#2a3542; --grid:#1d2630;
+  --chip:#2a3643; --chip-ink:#eef3f7; --chip-sub:#97aabd; --chip-edge:#41525f;
+  --hi:#f3a23e; --hi-soft:#4a3418; --lo:#4b5967; --accent:#3cb3ad; --accent-ink:#0a1416;
+  --f-op:#e27fc0; --f-rd:#52c495; --f-rs:#6ea8ec; --f-x:#7e8791; --p-in:#6f9cf0; --p-out:#4fcb88; --p-ctl:#b48af0; --p-op:#f0705f; color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 40px}
+.wrap{max-width:1440px;margin:0 auto;display:grid;gap:14px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+.brand h1{margin:0;font-size:22px;font-weight:700;letter-spacing:.01em;text-wrap:balance}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select,input{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--panel);padding:7px 12px;border-radius:6px;cursor:pointer;font-weight:600;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,[data-go]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+select,input[type=number]{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=range]{accent-color:var(--accent);width:110px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:14px;align-items:start}
+@media (max-width:1020px){.layout{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
+.card h2{margin:0;font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.card .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.card .bd{padding:12px 14px}
+.viewbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:13px;min-width:0}
+.crumbs button{background:none;border:0;padding:2px 4px;border-radius:4px;cursor:pointer;color:var(--accent);font-weight:600}
+.crumbs button[aria-current]{color:var(--ink);cursor:default}
+.crumbs span{color:var(--muted)}
+.stages{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;border-bottom:1px solid var(--line);align-items:center}
+.pill{font:600 11px var(--mono);letter-spacing:.06em;padding:4px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.on{background:var(--hi);border-color:var(--hi);color:#1a1006}
+.note{margin-left:auto;font-size:12px;color:var(--muted)}
+.card{position:relative}.viewer{position:relative;overflow:auto;background-color:var(--panel2);background-image:radial-gradient(var(--grid) 1px,transparent 1.2px);background-size:18px 18px;min-height:360px;max-height:72vh}
+.viewer svg{display:block;width:100%;min-width:640px;height:auto}
+.vnote{padding:8px 14px;font-size:13px;color:var(--muted);border-top:1px solid var(--line)}
+.narr{padding:12px 14px;border-top:1px solid var(--line);display:grid;gap:4px;min-height:74px}
+.narr p{margin:0;max-width:85ch}
+.narr .en{font-size:15px;font-weight:500}
+.narr .bn{font:15px/1.55 var(--bn);color:var(--muted)}
+code,.mono{font-family:var(--mono)}
+.narr code{background:var(--hi-soft);padding:0 4px;border-radius:3px;font-size:13px}
+/* SVG schematic */
+.sch text{font-family:var(--sans)}
+.t{fill:var(--ink);font-size:13px}
+.tm{fill:var(--ink);font-family:var(--mono)!important;font-size:12px}
+.small{font-size:11px}.tiny{font-size:10px;fill:var(--muted)}
+.muted{fill:var(--muted)}
+.ttl{fill:var(--ink);font-size:15px;font-weight:700}
+.chip .body{fill:var(--chip);stroke:var(--chip-edge);stroke-width:1.5}
+.chip .leg{fill:var(--lo)}
+.chip .notch{fill:none;stroke:var(--chip-sub);stroke-width:1}
+.chip .lbl{fill:var(--chip-ink);font-weight:700;font-size:15px;letter-spacing:.04em}
+.chip .sub{fill:var(--chip-sub);font-family:var(--mono)!important;font-size:11.5px}
+.chip.go{cursor:pointer}
+.chip.go:hover .body{stroke:var(--accent);stroke-width:2.5}
+.chip.act .body{stroke:var(--hi);stroke-width:3;filter:drop-shadow(0 0 7px var(--hi))}
+.pinhit{fill:transparent;cursor:help}.pin:hover .leg{stroke:var(--ink);stroke-width:1.5}.leg.v1{filter:brightness(1.25)}
+#tip{position:absolute;z-index:5;pointer-events:none;max-width:260px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:12.5px;line-height:1.45;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+#tip .pn{font:600 11px var(--mono);color:var(--muted)}#tip .tt{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:600;padding:0 6px;border-radius:9px;color:#fff}
+#tip .tt.in{background:var(--p-in)}#tip .tt.out{background:var(--p-out)}#tip .tt.ctl{background:var(--p-ctl)}#tip .tt.op{background:var(--p-op)}
+.leg.in{fill:var(--p-in)}.leg.out{fill:var(--p-out)}.leg.ctl{fill:var(--p-ctl)}.leg.op{fill:var(--p-op)}
+.go-hint{fill:var(--chip-sub);font-size:10px;letter-spacing:.06em}
+.wire{fill:none;stroke:var(--lo);stroke-width:2;stroke-linejoin:round}
+.wire.hi{stroke:var(--hi);stroke-width:2.5}
+.wire.ctl{stroke-dasharray:3 4;stroke-width:1.5}
+.wire.act{stroke:var(--hi);stroke-width:3;stroke-dasharray:9 6;animation:flow .55s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-15}}
+.dot{fill:var(--lo)}.dot.hi{fill:var(--hi)}
+.ibus,.busl{stroke:var(--line);stroke-width:8;stroke-linecap:round}
+.ibus.act,.bus.act .busl{stroke:var(--hi-soft)}
+.busflow{stroke:transparent;stroke-width:3;stroke-dasharray:10 8;fill:none}
+.bus.act .busflow{stroke:var(--hi);animation:flow .55s linear infinite}
+.bl{fill:var(--muted);font-size:11px;letter-spacing:.08em;font-weight:600}
+.bv{fill:var(--ink);font-family:var(--mono)!important;font-size:12px}
+.gate path{fill:var(--panel);stroke:var(--ink);stroke-width:1.8}
+.gate .xb{fill:none}
+.gate circle{fill:var(--panel);stroke:var(--ink);stroke-width:1.8}
+.gate.hi path:first-child{fill:var(--hi-soft)}
+.mscr{fill:#ffb347;font-family:var(--mono)!important;font-size:30px;font-weight:600}.msub{fill:#8fd1a8;font-family:var(--mono)!important;font-size:10.5px}
+.gl{fill:var(--muted);font-size:9px;font-weight:600;letter-spacing:.04em}
+.led{fill:var(--panel);stroke:var(--lo);stroke-width:1.5}.led.on{fill:var(--hi);stroke:var(--hi)}
+.bitb{fill:var(--panel);stroke:var(--line)}.bitb.one{fill:var(--hi-soft);stroke:var(--hi)}
+.f-op{fill:var(--f-op);color:var(--f-op)}.f-rd{fill:var(--f-rd);color:var(--f-rd)}.f-rs{fill:var(--f-rs);color:var(--f-rs)}.f-x{fill:var(--f-x);color:var(--f-x)}.f-im{fill:var(--accent);color:var(--accent)}
+.cell{cursor:pointer}.cell .cellb{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.cell:hover .cellb{stroke:var(--accent)}
+.cell.sel .cellb{stroke:var(--accent);stroke-dasharray:4 3}
+.cell.act .cellb{stroke:var(--hi);stroke-width:3;stroke-dasharray:none;filter:drop-shadow(0 0 6px var(--hi))}
+.state{cursor:default}.state circle{fill:var(--panel);stroke:var(--line);stroke-width:2}
+.state.on circle{fill:var(--hi-soft);stroke:var(--hi);stroke-width:3}
+.arrow{fill:none;stroke:var(--muted);stroke-width:1.8}
+/* Right rail */
+.side{display:grid;gap:14px;min-width:0}
+.prog{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.prog li{display:grid;grid-template-columns:28px auto 1fr 26px;gap:10px;align-items:center;padding:6px 8px;border-radius:6px;border:1px solid transparent}
+.prog li.cur{border-color:var(--hi);background:var(--hi-soft)}
+.prog li.done{opacity:.6}
+.prog .ad{font:500 12px var(--mono);color:var(--muted)}
+.prog .bits{font:600 13px var(--mono);letter-spacing:.04em;white-space:nowrap}
+.prog .bits span+span{margin-left:4px}
+.prog .mn{font:500 13px var(--mono)}
+.rm{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;border-radius:4px;padding:2px 6px}
+.rm:hover{color:var(--hi);background:var(--panel2)}
+.hlt{color:var(--muted)}
+.form{display:grid;gap:10px}
+.form .row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.form label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.preview{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px}
+.ribbon{display:flex;gap:3px;font:600 15px var(--mono)}
+.ribbon .seg{display:grid;justify-items:center;gap:2px;padding:4px 6px;border-radius:5px;border:1px solid currentColor}
+.ribbon .seg small{font:500 10px var(--sans);letter-spacing:.06em;text-transform:uppercase}
+.preview p{margin:0;font-size:12.5px;color:var(--muted)}
+.mlog{margin:0;padding:0;list-style:none;display:grid;gap:3px;font:13px var(--mono);max-height:220px;overflow:auto}.mlog li{display:flex;justify-content:space-between;gap:10px;padding:3px 6px;border-radius:4px}.mlog li:last-child{background:var(--hi-soft)}.mlog .e{color:var(--muted)}
+.regs{width:100%;border-collapse:collapse;font-size:13px}
+.regs th{font-size:11px;text-align:left;color:var(--muted);font-weight:600;letter-spacing:.05em;padding:4px 4px}
+.regs td{padding:5px 4px;border-top:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
+.regs td:first-child{font-weight:600;font-family:var(--sans)}
+.regs tr.flash td{background:var(--hi-soft)}
+.regs input{width:64px;padding:3px 6px}
+.flags{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.flag{font:600 12px var(--mono);padding:4px 8px;border-radius:5px;border:1px solid var(--line)}
+.flag.on{background:var(--hi);border-color:var(--hi);color:#1a1006}
+.vnoteb{font-size:12px;color:var(--muted);margin:4px 0 0}
+/* Legend */
+.legend{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:18px}
+@media (max-width:860px){.legend{grid-template-columns:minmax(0,1fr)}}
+.tbl{overflow-x:auto}
+table.isa{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+table.isa th{text-align:left;font-size:11px;color:var(--muted);letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.isa td{padding:6px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+table.isa td.m{font:600 13px var(--mono)}
+table.isa .bnc{font-family:var(--bn)}
+.keys{display:grid;gap:12px;font-size:13px}
+.keys h3{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.keys p{margin:0}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+@media (prefers-reduced-motion:reduce){.wire.act,.bus.act .busflow{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand">
+    <h1>Simple Microprocessor Simulation</h1>
+    <p>A very basic CPU: control unit, ALU, 4 registers · 2 operations (ADD, SUB)</p>
+  </div>
+  <div class="controls">
+    <button class="btn primary" id="play">▶ Play</button>
+    <button class="btn" id="step">Step</button>
+    <button class="btn" id="reset">Reset</button>
+    <label class="ctl" for="speed">Speed <input type="range" id="speed" min="300" max="3200" step="100" value="1500"></label>
+    <label class="ctl" for="voice">Voice
+      <select id="voice"><option value="off">Off</option><option value="en">English</option><option value="bn">বাংলা</option></select>
+    </label>
+    <label class="ctl" for="follow"><input type="checkbox" id="follow" checked> Follow execution</label>
+  </div>
+</header>
+
+<div class="layout">
+  <section class="card">
+    <div class="viewbar">
+      <button class="btn" id="up" title="Go up one level (Esc)">↑ Up</button>
+      <nav class="crumbs" id="crumbs" aria-label="Location"></nav>
+    </div>
+    <div class="stages" id="stages"></div>
+    <div class="viewer" id="viewer"></div><div id="tip" hidden></div>
+    <div class="vnote" id="vnote"></div>
+    <div class="narr" aria-live="polite"><p class="en" id="nEn"></p><p class="bn" id="nBn"></p></div>
+  </section>
+
+  <aside class="side">
+    <section class="card">
+      <div class="hd"><h2>Instructions</h2><span class="mono" style="font-size:12px;color:var(--muted)" id="pcount"></span></div>
+      <div class="bd"><ul class="prog" id="prog"></ul></div>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Add instruction</h2><button class="btn" id="sample" style="padding:4px 9px;font-size:12px">Load sample</button></div>
+      <div class="bd form">
+        <div class="row">
+          <label for="fop">Operation<select id="fop"><option>ADD</option><option>SUB</option></select></label>
+          <label for="frd">Rd<select id="frd"><option value="0">R0</option><option value="1">R1</option><option value="2">R2</option><option value="3">R3</option></select></label>
+          <label for="frs" id="lrs">Rs<select id="frs"><option value="0">R0</option><option value="1" selected>R1</option><option value="2">R2</option><option value="3">R3</option></select></label>
+        </div>
+        <div class="preview" id="preview"></div>
+        <button class="btn primary" id="add">+ Add instruction</button>
+      </div>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Monitor</h2><span style="font-size:11px;color:var(--muted)">ALU results</span></div>
+      <div class="bd"><ol class="mlog" id="mlog"></ol></div>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Registers</h2><span style="font-size:11px;color:var(--muted)">type a value (−128…255) to change it now</span></div>
+      <div class="bd">
+        <table class="regs" id="regs"></table>
+        <div class="flags" id="flags"></div>
+        <p class="vnoteb" id="vnoteb"></p>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<section class="card">
+  <div class="hd"><h2>ISA legend</h2><span style="font-size:12px;color:var(--muted)">6-bit instruction, no unused bits</span></div>
+  <div class="bd legend">
+    <div>
+      <div class="ribbon" style="margin-bottom:12px" aria-label="Instruction format">
+        <div class="seg f-op">54<small>opcode</small></div>
+        <div class="seg f-rd">32<small>Rd</small></div>
+        <div class="seg f-rs">10<small>Rs</small></div>
+      </div>
+      <div class="tbl"><table class="isa" id="isa"></table></div>
+    </div>
+    <div class="keys">
+      <div><h3>Register codes</h3><p class="mono">R0 = 00 · R1 = 01 · R2 = 10 · R3 = 11</p></div>
+      <div><h3>How it works</h3><p>The control unit reads the opcode and turns on one operation line. The ALU uses the matching unit and the answer is shown on the monitor. Registers keep their values; change them in the Registers panel.</p></div>
+      <div><h3>Flags</h3><p><b>ZF</b> zero: result is 0 · <b>CF</b> carry out of bit 7 · <b>OF</b> signed overflow · <b>SF</b> sign: bit 7 is 1 · <b>PF</b> parity: even number of 1 bits</p></div>
+      <div><h3>Colour key</h3><p><span class="sw" style="background:var(--hi)"></span>1 / active &nbsp; <span class="sw" style="background:var(--lo)"></span>0 &nbsp; <span class="sw" style="background:var(--f-op)"></span>opcode <span class="sw" style="background:var(--f-rd)"></span>Rd <span class="sw" style="background:var(--f-rs)"></span>Rs</p></div>
+      <div><h3>Chip pins</h3><p><span class="sw" style="background:var(--p-in)"></span>data in &nbsp; <span class="sw" style="background:var(--p-out)"></span>data out &nbsp; <span class="sw" style="background:var(--p-ctl)"></span>control (register select, write) &nbsp; <span class="sw" style="background:var(--p-op)"></span>operation lines. Gaps split pin groups; hover a chip for details.</p></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ===== ISA ===== */
+const OPS=['HLT','ADD','SUB','HLT'];
+const IW=6;
+const OPC={ADD:1,SUB:2};
+const UNITS=['ADD','SUB'];
+const ADDER={ADD:1,SUB:1};
+const OPLINES=UNITS.map(u=>u+' line');
+const UNARY={};
+const ISAROWS=[
+  ['ADD','01','ADD Rd, Rs','Rd + Rs','যোগ'],
+  ['SUB','10','SUB Rd, Rs','Rd − Rs','বিয়োগ'],
+  ['HLT','00','(end of list)','stop','থামো']];
+const SAMPLE=[{op:'ADD',rd:0,rs:1},{op:'SUB',rd:2,rs:3},{op:'ADD',rd:1,rs:2},{op:'SUB',rd:0,rs:3},{op:'SUB',rd:3,rs:0}];
+const enc=i=>(OPC[i.op]<<4)|(i.rd<<2)|(UNARY[i.op]?0:i.rs);
+const opOf=b=>OPS[(b>>4)&3];
+const dis=b=>{const m=opOf(b),rd=(b>>2)&3,rs=b&3;return m==='HLT'?'HLT':UNARY[m]?`${m} R${rd}`:`${m} R${rd}, R${rs}`};
+const isAlu=m=>UNITS.includes(m);
+const bin=(v,n=8)=>(v>>>0).toString(2).padStart(n,'0').slice(-n);
+const fmt=v=>v>127?`${v} (${v-256})`:`${v}`;
+const fld=(i,b)=>i>=4?'f-op':i>=2?'f-rd':'f-rs';
+const fieldsHTML=b=>{const s=bin(b,IW);return `<span class="f-op">${s.slice(0,2)}</span><span class="f-rd">${s.slice(2,4)}</span><span class="f-rs">${s.slice(4)}</span>`};
+
+/* Every ALU unit is the same 8-bit adder with different inputs */
+function unit(u,A,B){
+  const cfg={ADD:[A,B,0,'A + B'],SUB:[A,(~B)&255,1,'A + NOT B + 1']}[u];
+  const [X,Y,cin,how]=cfg,carry=[cin];let res=0;
+  for(let i=0;i<8;i++){const a=(X>>i)&1,b=(Y>>i)&1,c=carry[i];res|=(a^b^c)<<i;carry[i+1]=(a&b)|(c&(a^b))}
+  return {X,Y,cin,carry,res,how};
+}
+
+/* ===== State ===== */
+const S={prog:SAMPLE.map(x=>({...x})),init:[5,3,7,2],R:[0,0,0,0],IR:0,idx:0,cur:null,res:0,stage:'IDLE',phase:0,halted:false,active:new Set(),lastPhase:null,changed:null,narr:null,out:null,log:[],F:{ZF:0,CF:0,OF:0,SF:0,PF:0}};
+let path=['top'];
+const isA=id=>S.active.has(id)?' act':'';
+const act=l=>{S.active=new Set(l)};
+const cur=()=>({m:opOf(S.IR),rd:(S.IR>>2)&3,rs:S.IR&3});
+function flagsOf(m,A,B){
+  if(!isAlu(m))return {...F0(),PF:1,c7:0,c8:0,res:0,ones:0};
+  const r=unit(m,A,B);let c7=0,c8=0;
+  c7=r.carry[7];c8=r.carry[8];
+  let ones=0;for(let i=0;i<8;i++)ones+=(r.res>>i)&1;
+  return {ZF:r.res===0?1:0,CF:c8,OF:c7^c8,SF:(r.res>>7)&1,PF:ones%2===0?1:0,c7,c8,res:r.res,ones};
+}
+const FL=['ZF','CF','OF','SF','PF'];
+const FLD={ZF:'Zero flag',CF:'Carry flag',OF:'Overflow flag',SF:'Sign flag',PF:'Parity flag'};
+const fbits=F=>FL.reduce((a,f)=>(a<<1)|F[f],0);
+const FLAGN=FL.map(f=>f+' ('+FLD[f]+')');
+const F0=()=>({ZF:0,CF:0,OF:0,SF:0,PF:0});
+const fstr=F=>FL.map(f=>f+'='+F[f]).join(' ');
+const oneHot=m=>isAlu(m)?1<<(UNITS.length-1-UNITS.indexOf(m)):0;
+
+function reset(){
+  stopPlay();S.R=S.init.slice();S.IR=0;S.idx=0;S.cur=null;S.res=0;S.stage='IDLE';S.phase=0;S.halted=false;S.changed=null;S.lastPhase=null;S.out=null;S.log=[];S.F=F0();act([]);
+  S.narr={en:`Ready. ${S.prog.length} instruction${S.prog.length===1?'':'s'} waiting. Press Play or Step.`,bn:`প্রস্তুত। ${S.prog.length}টি নির্দেশনা অপেক্ষায়। Play বা Step চাপুন।`};
+  render();
+}
+
+/* ===== 4 steps per instruction ===== */
+const BNOP={ADD:'যোগ',SUB:'বিয়োগ'};
+function microStep(){
+  if(S.halted)return null;const ph=S.phase;let n;S.changed=null;
+  if(ph===0){
+    S.stage='LOAD';
+    if(S.idx<S.prog.length){S.cur=S.idx;S.IR=enc(S.prog[S.idx]);S.idx++;
+      n={en:`Load: ${dis(S.IR)} ⟦${bin(S.IR,IW)}⟧ goes into the Instruction Register.`,bn:`লোড: ${dis(S.IR)} ⟦${bin(S.IR,IW)}⟧ ইনস্ট্রাকশন রেজিস্টারে গেল।`};
+    }else{S.cur=null;S.IR=0;n={en:`No instructions left. IR gets ⟦000000⟧ (HLT).`,bn:`আর নির্দেশনা নেই। IR-এ ⟦000000⟧ (HLT) এলো।`}}
+    act(['inp','ir','w-in-ir']);S.phase=1;
+  }else if(ph===1){
+    S.stage='DECODE';const {m,rd,rs}=cur();act(['ir','cu','w-ir-cu','dec']);
+    if(m==='HLT'){S.stage='HALT';S.halted=true;S.cur=null;n={en:`Opcode ⟦00⟧ is HLT. Program finished.`,bn:`অপকোড ⟦00⟧ মানে HLT। প্রোগ্রাম শেষ।`}}
+    else{act(['ir','cu','w-ir-cu','dec','w-cu-reg','w-cu-alu']);
+      const ue=UNARY[m]?`Use R${rd}.`:`Use R${rd} and R${rs}.`;
+      const ub=UNARY[m]?`রেজিস্টার R${rd}।`:`রেজিস্টার R${rd} ও R${rs}।`;
+      n={en:`Decode: opcode ⟦${bin(S.IR>>4,2)}⟧ means ${m}. `+ue,bn:`ডিকোড: অপকোড ⟦${bin(S.IR>>4,2)}⟧ মানে ${m}, অর্থাৎ ${BNOP[m]}। `+ub};S.phase=2}
+  }else if(ph===2){
+    S.stage='EXECUTE';const {m,rd,rs}=cur(),A=S.R[rd],B=S.R[rs];
+    S.res=unit(m,A,B).res;
+    act(['regs','r'+rd,UNARY[m]?'':'r'+rs,'w-reg-alu','alu','u-'+m,'cu','w-cu-alu']);
+    const a=fmt(A),b=fmt(B),r=fmt(S.res);
+    const t={ADD:[`${a} + ${b} = ${r}`,`${a} যোগ ${b} সমান ${r}`],SUB:[`${a} − ${b} = ${r}`,`${a} বিয়োগ ${b} সমান ${r}`]}[m];
+    S.F=flagsOf(m,A,B);const F=S.F;S.out=S.res;S.log.push({i:dis(S.IR),r:S.res,f:fstr(F)});act(['regs','r'+rd,UNARY[m]?'':'r'+rs,'w-reg-alu','alu','u-'+m,'cu','w-cu-alu','w-alu-mon','mon','flags','w-alu-flags']);
+    n={en:`Execute: the ALU calculates ${t[0]}. The result appears on the monitor. Flags: ${fstr(F)}.`,bn:`এক্সিকিউট: ALU হিসাব করল, ${t[1]}। ফলাফল মনিটরে দেখা যাচ্ছে। ফ্ল্যাগ: ${fstr(F)}।`};S.phase=0;
+  }
+  S.lastPhase=ph;S.narr=n;return n;
+}
+
+/* ===== SVG helpers ===== */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const T=(x,y,s,c='t',a='start')=>`<text x="${x}" y="${y}" class="${c}" text-anchor="${a}">${esc(s)}</text>`;
+const wire=(pts,c='')=>`<polyline class="wire ${c}" points="${pts.map(p=>p[0]+','+p[1]).join(' ')}"/>`;
+const wv=v=>v?'hi':'';
+const dot=(x,y,v)=>`<circle class="dot${v?' hi':''}" cx="${x}" cy="${y}" r="3.5"/>`;
+const led=(x,y,v)=>`<circle class="led${v?' on':''}" cx="${x}" cy="${y}" r="6"/>`;
+function chip(o){
+  const {id='',x,y,w,h,label,sub,go,pins={}}=o;let legs='';
+  const GAP=1.3,TW={in:'data in',out:'data out',ctl:'control',op:'operation line'},L=[];
+  const side=(gs,horiz,fixed,sd)=>{if(!gs)return;const len=horiz?w:h,org=horiz?x:y,tot=gs.reduce((a,g)=>a+g[0],0)+GAP*(gs.length-1),sl=len/tot,pw=Math.min(8,sl*.6);let pos=0;
+    gs.forEach(([n,ty,lb,d,v,nm])=>{for(let k=0;k<n;k++){const c=org+(pos+k+.5)*sl-pw/2,bi=n-1-k,name=nm?nm[k]:n>1?`${lb} bit ${bi}`:lb,val=v==null?null:(v>>bi)&1;
+      L.push({sd,c,ty,html:`<b>${esc(label)} · ${esc(name)}</b><span class="tt ${ty}">${TW[ty]}</span><br>${esc(d||'')}${val==null?'':`<br>now: <b class="mono">${val}</b>`}`,horiz,fixed,pw,val})}
+      pos+=n+GAP})};
+  side(pins.l,0,x-7,0);side(pins.b,1,y+h,1);side(pins.r,0,x+w,2);side(pins.t,1,y-7,3);
+  const ord=[...L.filter(p=>p.sd===0),...L.filter(p=>p.sd===1),...L.filter(p=>p.sd===2).reverse(),...L.filter(p=>p.sd===3).reverse()];
+  ord.forEach((p,i)=>{const tip=`<span class="pn">pin ${i+1}</span> `+p.html;const c=p.c.toFixed(1),pw=p.pw.toFixed(1);
+    legs+=p.horiz?`<g class="pin" data-tip="${esc(tip).replace(/"/g,'&quot;')}"><rect class="pinhit" x="${(p.c-3).toFixed(1)}" y="${p.fixed-4}" width="${(p.pw+6).toFixed(1)}" height="15"/><rect class="leg ${p.ty}${p.val?' v1':''}" x="${c}" y="${p.fixed}" width="${pw}" height="7"/></g>`
+      :`<g class="pin" data-tip="${esc(tip).replace(/"/g,'&quot;')}"><rect class="pinhit" x="${p.fixed-4}" y="${(p.c-3).toFixed(1)}" width="15" height="${(p.pw+6).toFixed(1)}"/><rect class="leg ${p.ty}${p.val?' v1':''}" x="${p.fixed}" y="${c}" width="7" height="${pw}"/></g>`});
+  const np=L.length;
+  const subs=sub==null?[]:Array.isArray(sub)?sub:[sub];const ly=y+h/2-(subs.length*8)+4;
+  return `<g class="chip${go?' go':''}${id?isA(id):''}"${go?` data-go="${go}" tabindex="0" role="button" aria-label="Open ${esc(label)}"`:''}><rect class="body" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><circle class="notch" cx="${x+11}" cy="${y+11}" r="3.5"/>${T(x+w/2,ly,label,'lbl','middle')}${subs.map((s,k)=>T(x+w/2,ly+18+k*16,s,'sub','middle')).join('')}${go?T(x+w-8,y+h-7,'OPEN ›','go-hint','end'):''}${np?T(x+w-8,y+14,np+' pins','go-hint','end'):''}${legs}</g>`;
+}
+function gate(type,x,y,n,out){
+  const h=Math.max(40,n*16),base=type==='NAND'?'AND':type;let d,ox,extra='',inset=0;
+  if(base==='AND'){d=`M${x},${y}h28a${h/2},${h/2} 0 0 1 0,${h}h-28Z`;ox=x+28+h/2}
+  else if(base==='OR'||base==='XOR'){d=`M${x},${y}Q${x+14},${y+h/2} ${x},${y+h}Q${x+36},${y+h} ${x+54},${y+h/2}Q${x+36},${y} ${x},${y}Z`;ox=x+54;inset=5;
+    if(base==='XOR'){extra=`<path class="xb" d="M${x-8},${y}Q${x+6},${y+h/2} ${x-8},${y+h}"/>`;inset=-4}}
+  else{d=`M${x},${y+h/2-14}L${x+28},${y+h/2}L${x},${y+h/2+14}Z`;ox=x+28}
+  let bub='';if(type==='NOT'||type==='NAND'){bub=`<circle cx="${ox+4}" cy="${y+h/2}" r="4"/>`;ox+=8}
+  const ins=[];if(type==='NOT')ins.push([x,y+h/2]);else for(let k=0;k<n;k++)ins.push([x+inset,+(y+h*(k+1)/(n+1)).toFixed(1)]);
+  const lbl=type==='NOT'?'':T(x+(base==='AND'?20:24),y+h/2+3,type,'gl','middle');
+  return {svg:`<g class="gate${out?' hi':''}"><path d="${d}"/>${extra}${bub}${lbl}</g>`,ins,out:[ox,y+h/2],h};
+}
+const orth=(a,b,mx)=>[a,[mx,a[1]],[mx,b[1]],b];
+function bitRow(x,y,v,n,w,instr){let s='';for(let k=0;k<n;k++){const i=n-1-k,b=(v>>i)&1;
+  s+=`<rect class="bitb${b?' one':''}" x="${x+k*(w+2)}" y="${y}" width="${w}" height="${w+2}" rx="3"/>`+T(x+k*(w+2)+w/2,y+w/2+6,b,'tm '+(instr?fld(i,v):''),'middle')}return s}
+
+/* ===== Views ===== */
+function vTop(){
+  const W=900,H=420,{m}=cur(),F=S.F;let s='';
+  s+=wire([[40,200],[263,200]],S.active.has('w-in-ir')?'act':'')+T(40,190,'instruction in (6 bit)','tm small');
+  s+=wire([[637,200],[860,200]],S.active.has('w-alu-mon')?'act':'')+T(860,190,'result out (8 bit)','tm small','end')+T(860,222,S.out==null?'—':`${bin(S.out)} = ${fmt(S.out)}`,'tm','end');
+  s+=wire([[450,327],[450,380]],S.active.has('w-alu-flags')?'act':'')+T(462,372,'flags out (5 bit)  '+fstr(F),'tm small');
+  s+=chip({id:'all',x:270,y:70,w:360,h:250,pins:{l:[[6,'in','instruction','One bit of the instruction fed into the processor.',S.IR]],r:[[8,'out','result','One bit of the ALU result, shown on the monitor.',S.out??0]],b:[[5,'out','','Flag output.',fbits(F),FLAGN]]},
+    label:'SIMPLE CPU',sub:['6-bit instr · 8-bit data · ADD, SUB',S.cur!=null?`now: ${dis(S.IR)}`:S.halted?'halted':'idle',`stage: ${S.stage}`],go:'cpu'});
+  return {w:W,h:H,svg:s,note:'The whole microprocessor as one chip: 6 instruction pins in, 8 result pins out, 5 flag pins out. Click it to look inside.'};
+}
+function vCpu(){
+  const W=960,H=520,L=S.prog.length;let s='';
+  const ih=Math.max(150,52+(L+1)*22);
+  s+=`<rect x="20" y="30" width="240" height="${ih}" rx="8" fill="var(--panel)" stroke="${S.active.has('inp')?'var(--hi)':'var(--line)'}" stroke-width="${S.active.has('inp')?2.5:1.5}"/>`+T(34,54,'INSTRUCTIONS','bl');
+  S.prog.forEach((p,i)=>{const b=enc(p),y=80+i*22;s+=`<rect x="26" y="${y-15}" width="228" height="20" rx="4" fill="${S.cur===i?'var(--hi-soft)':'none'}"/>`+T(34,y,bin(b,IW),'tm small')+T(248,y,dis(b),'tm small','end')});
+  s+=T(34,80+L*22,'end → HLT','tm tiny');
+  s+=wire([[260,75],[300,75]],isA('w-in-ir')?'act':'');
+  s+=wire([[450,118],[450,163]],isA('w-ir-cu')?'act':'');
+  s+=wire([[600,230],[640,230],[640,150],[653,150]],'ctl '+(isA('w-cu-reg')?'act':''))+T(626,222,'Rd, Rs','tm tiny','middle');
+  s+=wire([[450,297],[450,363]],'ctl '+(isA('w-cu-alu')?'act':''))+T(460,335,'which operation','tm tiny');
+  s+=wire([[700,297],[700,330],[560,330],[560,363]],isA('w-reg-alu')?'act':'')+T(706,318,'A (8)','tm small');
+  s+=wire([[860,297],[860,345],[680,345],[680,363]],isA('w-reg-alu')?'act':'')+T(866,318,'B (8)','tm small');
+  s+=wire([[740,430],[783,430]],isA('w-alu-mon')?'act':'')+T(762,420,'8','tm tiny','middle');
+  s+=chip({id:'mon',x:790,y:370,w:150,h:120,pins:{l:[[8,'in','result','One bit of the ALU answer.',S.out??0]]},label:''});
+  s+=`<rect x="802" y="380" width="126" height="80" rx="4" fill="#0c1714" stroke="${S.active.has('mon')?'var(--hi)':'#33433d'}" stroke-width="2"/>`;
+  s+=T(865,414,S.out==null?'—':String(S.out>127?S.out-256:S.out),'mscr','middle')+T(865,434,S.out==null?'no result yet':bin(S.out),'msub','middle')+T(865,450,S.out==null?'':(S.log.length?S.log[S.log.length-1].i:''),'msub','middle')+T(865,481,'MONITOR','lbl','middle');
+  const {m,rd,rs}=cur();
+  s+=chip({id:'ir',x:300,y:40,w:300,h:70,pins:{l:[[6,'in','instruction','One bit of the next instruction, coming from the instruction list.',S.IR]],b:[[2,'out','opcode','Operation code, sent to the control unit.',S.IR>>4],[2,'out','Rd','Register number of operand A, sent to the control unit.',rd],[2,'out','Rs','Register number of operand B, sent to the control unit.',rs]]},label:'IR',sub:`${bin(S.IR,IW).replace(/^(..)(..)(..)$/,'$1 $2 $3')}  ${dis(S.IR)}`,go:'ir'});
+  s+=chip({id:'cu',x:300,y:170,w:300,h:120,pins:{t:[[2,'in','opcode','Opcode bit from the IR. Tells the control unit which instruction this is.',S.IR>>4],[2,'in','Rd','Register number of operand A, from the IR.',rd],[2,'in','Rs','Register number of operand B, from the IR.',rs]],b:[[UNITS.length,'op','','Goes to the ALU. Only one line is 1: it says which unit\'s answer to use.',oneHot(m),OPLINES]],r:[[2,'ctl','Rd select','Picks the register read as operand A.',rd],[2,'ctl','Rs select','Picks the register read as operand B.',rs]]},label:'CONTROL UNIT',sub:[`opcode ${bin(S.IR>>4,2)} → ${m}`,UNARY[m]?`Rd = R${rd}`:m==='HLT'?'':`Rd = R${rd}, Rs = R${rs}`],go:'cu'});
+  s+=chip({id:'regs',x:660,y:40,w:270,h:250,pins:{l:[[2,'ctl','Rd select','Which register is sent out on A.',rd],[2,'ctl','Rs select','Which register is sent out on B.',rs]],b:[[8,'out','A','Value of Rd, sent to the ALU as operand A.',S.R[rd]],[8,'out','B','Value of Rs, sent to the ALU as operand B.',S.R[rs]]]},label:'REGISTERS',sub:[0,1,2,3].map(k=>`R${k} ${bin(S.R[k])} = ${S.R[k]}`),go:'regs'});
+  const F=S.F;s+=wire([[402,430],[413,430]],isA('w-alu-flags')?'act':'');
+  s+=chip({id:'flags',x:276,y:385,w:120,h:90,pins:{r:[[5,'in','','Flag bit from the ALU, saved after every calculation.',fbits(F),FLAGN]]},label:'FLAGS',sub:[FL.slice(0,3).map(f=>f+F[f]).join(' '),FL.slice(3).map(f=>f+F[f]).join(' ')],go:'flags'});
+  s+=chip({id:'alu',x:420,y:370,w:320,h:120,pins:{l:[[5,'out','','Flag bit, sent to the flags register.',fbits(F),FLAGN]],t:[[UNITS.length,'op','','From the control unit. The line that is 1 chooses the operation.',oneHot(m),OPLINES],[8,'in','A','Operand A from register Rd.',S.R[rd]],[8,'in','B','Operand B from register Rs.',S.R[rs]]],r:[[8,'out','result','The answer, sent to the monitor.',isAlu(m)?unit(m,S.R[rd],S.R[rs]).res:0]]},label:'ALU',sub:[isAlu(m)?`${m}  →  ${fmt(S.res)}`:m==='HLT'?'idle':`not used by ${m}`],go:'alu'});
+  return {w:W,h:H,svg:s,note:'The whole CPU. IR holds the instruction, the control unit decodes it, the ALU calculates, registers store the numbers. Click any chip to go inside.'};
+}
+function vCu(){
+  const W=900,H=420;let s='';const {m,rd,rs}=cur(),op=S.IR>>4;
+  s+=T(40,30,'IR','tm small muted')+bitRow(40,40,S.IR,IW,32,true);
+  const bx=k=>40+k*34;
+  s+=wire([[bx(1)-1,76],[bx(1)-1,133]],isA('w-ir-cu')?'act':'')+T(bx(1)+8,108,'opcode','tm tiny');
+  s+=wire([[bx(4),76],[bx(4),100],[560,100],[560,330],[640,330]],isA('w-cu-reg')?'act':'')+T(570,120,'Rd, Rs → registers','tm tiny');
+  s+=chip({id:'dec',x:40,y:140,w:240,h:110,pins:{t:[[2,'in','opcode','Opcode bit from the IR.',op]],r:[[3,'op','','Becomes 1 only when the opcode matches this line.',op<3?1<<(2-op):0,['HLT line'].concat(OPLINES)]]},label:'OPCODE DECODER',sub:`${bin(op,2)} → ${m}`,go:'dec'});
+  s+=wire([[287,195],[340,195]],isA('w-cu-alu')?'act':'');
+  UNITS.forEach((u,k)=>{const y=126+k*28,on=u===m?1:0;s+=led(360,y,on)+T(376,y+5,u+'  → ALU','tm'+(on?'':' muted'))});
+  s+=T(360,334,'one line is on → says what to do','tm tiny');
+  s+=`<rect x="640" y="300" width="220" height="60" rx="6" fill="var(--panel)" stroke="var(--line)"/>`+T(750,326,UNARY[m]?`R${rd}`:m==='HLT'?'—':`Rd R${rd} · Rs R${rs}`,'tm','middle')+T(750,346,'register select','tm tiny','middle');
+  return {w:W,h:H,svg:s,note:'Control unit: the opcode decoder turns the 2 opcode bits into one "operation" line for the ALU. The Rd and Rs bits pick the registers.'};
+}
+function vDec(){
+  const op=S.IR>>4,nb=2,W=840,gx=540,gap=60,top=160;let s=T(40,24,`Opcode decoder: ${bin(op,2)} → ${opOf(S.IR)}`,'ttl'),rails='',gates='';
+  const names=['o1','o0'],outs=['00 HLT','01 ADD','10 SUB'],N=3,bot=top+(N-1)*gap+36,R=[];
+  for(let j=0;j<nb;j++){const v=(op>>(nb-1-j))&1,xT=160+j*110,xF=xT+60,y=58+j*40;R.push({xT,xF,v});const ng=gate('NOT',xT+12,y-20,1,1-v);
+    rails+=wire([[40,y],[xT,y]],wv(v))+dot(xT,y,v)+wire([[xT,y],[xT,bot]],wv(v))+wire([[xT,y],ng.ins[0]],wv(v))+wire([ng.out,[xF,y],[xF,bot]],wv(1-v))+ng.svg+T(40,y-6,`${names[j]} = ${v}`,'tm small')}
+  for(let k=0;k<N;k++){const gy=top+k*gap,o=k===op?1:0,g=gate('AND',gx,gy,nb,o);
+    for(let j=0;j<nb;j++){const b=(k>>(nb-1-j))&1,r=R[j],rx=b?r.xT:r.xF,v=b?r.v:1-r.v,y=g.ins[j][1];gates+=wire([[rx,y],g.ins[j]],wv(v))+dot(rx,y,v)}
+    gates+=g.svg+wire([g.out,[gx+110,g.out[1]]],wv(o))+led(gx+124,g.out[1],o)+T(gx+138,g.out[1]+5,outs[k],'tm small')}
+  return {w:W,h:bot+30,svg:s+rails+gates,note:'NOT gates make the inverted bits. Each AND gate turns on for exactly one opcode.'};
+}
+function vAlu(){
+  const W=960,H=500;let s='';const {m:m0,rd,rs}=cur(),m=isAlu(m0)?m0:'HLT',A=S.R[rd],B=S.R[rs],bu=!UNARY[m];
+  s+=T(40,34,`A = R${rd} = ${A}`,'tm')+T(260,34,bu?`B = R${rs} = ${B}`:'B not used','tm');
+  s+=wire([[40,52],[900,52]],isA('w-reg-alu')?'act':'')+wire([[40,64],[900,64]],isA('w-reg-alu')&&bu?'act':'');
+  UNITS.forEach((u,k)=>{const x=60+k*440,r=unit(u,A,B).res,on=u===m;
+    s+=wire([[x+100,52],[x+100,113]])+dot(x+100,52,0)+wire([[x+300,64],[x+300,113]])+dot(x+300,64,0);
+    s+=chip({id:'u-'+u,x,y:120,w:400,h:90,pins:{t:[[8,'in','A','Operand A (value of Rd).',A],[8,'in','B','Operand B (value of Rs).',B]],b:[[8,'out','answer',`This unit's answer (${u}), sent to the selector.`,r]]},label:u,sub:[unit(u,A,B).how,`= ${fmt(r)}`],go:u.toLowerCase()});
+    s+=wire([[x+200,217],[x+200,255]],on&&m!=='HLT'?'act':'')});
+  s+=chip({id:'alu',x:40,y:262,w:860,h:70,pins:{t:UNITS.map(u=>[8,'in',u+' answer',`Answer from the ${u} unit.`,unit(u,A,B).res]),l:[[UNITS.length,'op','','From the control unit. Picks which answer goes through.',oneHot(m),OPLINES]],b:[[8,'out','result','The chosen answer, sent to the registers.',m==='HLT'?0:unit(m,A,B).res]]},label:'SELECTOR',sub:m==='HLT'?'nothing selected':`control unit picks ${m}`});
+  s+=wire([[10,297],[33,297]],m!=='HLT'?'act':'')+T(8,252,'from CU','tm tiny');
+  s+=wire([[470,339],[470,390]],isA('w-alu-mon')?'act':'');
+  s+=T(40,390,'RESULT','tm small muted')+bitRow(40,398,m==='HLT'?0:unit(m,A,B).res,8,30,false)+T(330,421,m==='HLT'?'':`= ${fmt(unit(m,A,B).res)}  → monitor`,'tm');
+  s+=T(560,421,'(− numbers use two\'s complement)','tm tiny');
+  {const F=flagsOf(m,A,B);s+=T(40,478,'FLAGS →','tm small muted');FL.forEach((f,k)=>{s+=led(130+k*82,474,F[f])+T(142+k*82,479,`${f}=${F[f]}`,'tm small')});s+=T(560,479,'ZF zero · CF carry · OF overflow · SF sign · PF parity','tm tiny');}
+  return {w:W,h:H,svg:s,note:'ALU: two small units all calculate at once. The control unit\'s signal picks which answer comes out. Click a unit to see how it works.'};
+}
+function vUnit(u){
+  const {rd,rs}=cur(),r=unit(u,S.R[rd],S.R[rs]),W=900,H=330;let s='';
+  s+=T(40,30,`${u} unit: ${r.how}  (built from 8 full adders)`,'ttl');
+  const fx=i=>40+(7-i)*100;
+  for(let i=0;i<8;i++){const x=fx(i),a=(r.X>>i)&1,b=(r.Y>>i)&1,c=r.carry[i],co=r.carry[i+1],sm=(r.res>>i)&1;
+    s+=T(x+13,70,'a'+i+'='+a,'tm tiny','middle')+T(x+71,86,'b'+i+'='+b,'tm tiny','middle');
+    s+=wire([[x+13,76],[x+13,123]],wv(a))+wire([[x+71,92],[x+71,123]],wv(b));
+    s+=chip({x,y:130,w:84,h:76,pins:{t:[[1,'in','A','Bit '+i+' of the A row.',a],[1,'in','B','Bit '+i+' of the B row.',b]],r:[[1,'in','carry in','Carry coming from the bit on the right.',c]],l:[[1,'out','carry out','Carry passed to the bit on the left.',co]],b:[[1,'out','sum','Bit '+i+' of the answer.',sm]]},label:'FA'+i,sub:`s${sm} c${co}`,go:'fa'+i});
+    s+=wire([[x,168],[x-16,168]],wv(co));s+=wire([[x+42,213],[x+42,246]],wv(sm));
+    s+=`<rect class="bitb${sm?' one':''}" x="${x+28}" y="250" width="28" height="28" rx="3"/>`+T(x+42,269,sm,'tm','middle')}
+  s+=wire([[880,168],[fx(0)+84,168]],wv(r.cin))+T(880,158,'carry in '+r.cin,'tm tiny','end');
+  s+=T(40,310,`A row ${bin(r.X)}  +  B row ${bin(r.Y)}  +  ${r.cin}  =  ${bin(r.res)} = ${fmt(r.res)}`,'tm');
+  return {w:W,h:H,svg:s,note:'One full adder per bit. The carry moves from right to left. Click a full adder to see its gates.'};
+}
+function vFA(u,i){
+  const {rd,rs}=cur(),r=unit(u,S.R[rd],S.R[rs]),a=(r.X>>i)&1,b=(r.Y>>i)&1,c=r.carry[i],p=a^b,sm=p^c,g=a&b,t=p&c,co=g|t,W=860,H=360;let s='';
+  s+=T(40,30,`Full adder, bit ${i}`,'ttl');
+  const G2=gate('XOR',380,70,2,p),G3=gate('AND',380,190,2,g),G4=gate('XOR',580,110,2,sm),G5=gate('AND',580,250,2,t),G6=gate('OR',740,215,2,co);
+  s+=wire([[40,90],[320,90]],wv(a))+dot(300,90,a)+wire([[300,90],[300,G2.ins[0][1]],G2.ins[0]],wv(a))+wire([[320,90],[320,G3.ins[0][1]],G3.ins[0]],wv(a));
+  s+=wire([[40,170],[270,170]],wv(b))+dot(270,170,b)+wire([[270,170],[270,G2.ins[1][1]],G2.ins[1]],wv(b))+wire([[270,170],[270,G3.ins[1][1]],G3.ins[1]],wv(b));
+  s+=wire([G2.out,[480,G2.out[1]],[480,G5.ins[0][1]],G5.ins[0]],wv(p))+dot(480,G4.ins[0][1],p)+wire([[480,G4.ins[0][1]],G4.ins[0]],wv(p));
+  s+=wire([[40,320],[520,320],[520,G4.ins[1][1]],G4.ins[1]],wv(c))+dot(520,G5.ins[1][1],c)+wire([[520,G5.ins[1][1]],G5.ins[1]],wv(c));
+  s+=wire(orth(G3.out,G6.ins[0],700),wv(g))+wire(orth(G5.out,G6.ins[1],700),wv(t));
+  s+=wire([G4.out,[840,G4.out[1]]],wv(sm))+wire([G6.out,[840,G6.out[1]]],wv(co));
+  s+=G2.svg+G3.svg+G4.svg+G5.svg+G6.svg;
+  s+=T(40,82,'A = '+a,'tm small')+T(40,162,'B = '+b,'tm small')+T(40,312,'Carry in = '+c,'tm small');
+  s+=T(840,G4.out[1]-8,'SUM = '+sm,'tm small','end')+T(840,G6.out[1]-8,'Carry out = '+co,'tm small','end');
+  return {w:W,h:H,svg:s,note:'SUM = A XOR B XOR Carry-in. Carry-out = (A AND B) OR (Carry-in AND (A XOR B)).'};
+}
+function vFlags(){
+  const {m:m0,rd,rs}=cur(),m=isAlu(m0)?m0:'HLT',F=flagsOf(m,S.R[rd],S.R[rs]),r=F.res,W=880,H=620;let s='';
+  s+=T(40,24,`Flag logic${m==='HLT'?'':' — '+m}`,'ttl');
+  const bitsIn=(g,y0)=>{let o='';for(let k=0;k<8;k++){const i=7-k,b=(r>>i)&1,y=g.ins[k][1];o+=wire([[70,y],g.ins[k]],wv(b))+T(64,y+4,'r'+i+'='+b,'tm tiny','end')}return o};
+  const zg=gate('NOR',320,46,8,F.ZF);s+=bitsIn(zg)+zg.svg+wire([zg.out,[700,zg.out[1]]],wv(F.ZF));
+  const sy=200;s+=dot(150,zg.ins[0][1],F.SF)+wire([[150,zg.ins[0][1]],[150,sy],[700,sy]],wv(F.SF));
+  const x8=(()=>{let v=0;for(let i=0;i<8;i++)v^=(r>>i)&1;return v})();
+  const pg=gate('XOR',320,232,8,x8),pn=gate('NOT',470,pg.out[1]-20,1,F.PF);s+=bitsIn(pg)+pg.svg+wire([pg.out,pn.ins[0]],wv(x8))+pn.svg+wire([pn.out,[700,pn.out[1]]],wv(F.PF));
+  const xg=gate('XOR',320,420,2,F.OF);
+  s+=wire([[70,xg.ins[0][1]],xg.ins[0]],wv(F.c7))+T(64,xg.ins[0][1]+4,'c7='+F.c7,'tm tiny','end');
+  s+=wire([[70,510],[700,510]],wv(F.c8))+dot(200,510,F.c8)+wire([[200,510],[200,xg.ins[1][1]],xg.ins[1]],wv(F.c8))+T(64,514,'c8='+F.c8,'tm tiny','end');
+  s+=xg.svg+wire([xg.out,[700,xg.out[1]]],wv(F.OF));
+  [['ZF',zg.out[1],'zero: NOR of all 8 bits'],['SF',sy,'sign: copy of bit 7'],['PF',pn.out[1],`parity: 1 when the count of 1s is even (${F.ones} now)`],['OF',xg.out[1],'overflow: c7 XOR c8'],['CF',510,'carry out of bit 7']].forEach(([f,y,d])=>{s+=led(712,y,F[f])+T(726,y+5,`${f}=${F[f]}`,'tm')+T(726,y+21,d,'tm tiny')});
+  s+=T(40,580,'c7, c8 = carries into and out of bit 7 of the adder.','tm tiny');
+  return {w:W,h:H,svg:s,note:'Five flags describe the last ALU answer. They are saved after every calculation.'};
+}
+function vRegs(){
+  const W=900,H=420;let s='';const {m,rd,rs}=cur();
+  for(let k=0;k<4;k++){const y=30+k*96;
+    s+=chip({id:'r'+k,x:200,y,w:500,h:70,pins:{l:[[8,'in','data','The value you type in the Registers panel.',S.R[k]]],r:[[8,'out','value','The stored value, read by port A or B.',S.R[k]]]},label:'R'+k,sub:`${bin(S.R[k])} = ${fmt(S.R[k])}`,go:'r'+k});
+    const tags=[];if(m!=='HLT'&&k===rd)tags.push('Rd');if(m!=='HLT'&&!UNARY[m]&&k===rs)tags.push('Rs');
+    s+=T(720,y+40,tags.join(' + '),'tm');s+=T(180,y+40,bin(k,2),'tm muted','end');}
+  return {w:W,h:H,svg:s,note:'Four 8-bit registers. The 2-bit code on the left is how an instruction names each one. Click a register to see its bits.'};
+}
+function regInfo(k){if(k==='ir')return{l:'Instruction Register (IR)',v:S.IR,ins:true,n:IW};if(/^r\d$/.test(k))return{l:'Register R'+k[1],v:S.R[+k[1]],n:8};return null}
+function vReg8(k){
+  const I=regInfo(k),N=I.n,W=900,H=300;let s='';const cw=88,gap=10,x0=(W-(N*cw+(N-1)*gap))/2;
+  s+=T(x0,30,`${I.l} = ${bin(I.v,N)}`+(I.ins?`  (${dis(I.v)})`:` = ${fmt(I.v)}`),'ttl');
+  for(let c=0;c<N;c++){const i=N-1-c,b=(I.v>>i)&1,x=x0+c*(cw+gap);
+    if(I.ins)s+=`<rect x="${x}" y="64" width="${cw}" height="5" rx="2" class="${fld(i,I.v)}"/>`;
+    s+=chip({x,y:90,w:cw,h:100,pins:{t:[[1,'in','D','The bit to store.',b]],l:[[1,'ctl','write','Becomes 1 when you set a new value; 0 = keep the stored bit.',0]],b:[[1,'out','Q','The stored bit.',b]]},label:String(b),sub:['bit '+i],go:'b'+i});}
+  s+=T(x0,250,`Each box is a 1-bit memory cell (D latch). ${N} of them make this register.`,'t muted');
+  return {w:W,h:H,svg:s,note:`${I.l}: ${N} memory cells, one per bit. Click a cell to see its gates.`};
+}
+function vLatch(k,i){
+  const I=regInfo(k),D=(I.v>>i)&1,EN=0,Q=D,Sb=1,Rb=1,W=760,H=340;let s='';
+  s+=T(40,30,`1-bit memory cell (D latch), ${I.l} bit ${i} = ${Q}`,'ttl');
+  const n1=gate('NAND',260,70,2,Sb),n2=gate('NAND',260,250,2,Rb),n3=gate('NAND',480,80,2,Q),n4=gate('NAND',480,240,2,1-Q),nt=gate('NOT',110,260,1,1-D);
+  s+=wire([[40,90],[200,90],[200,n1.ins[0][1]],n1.ins[0]],wv(D))+dot(90,90,D)+wire([[90,90],[90,280],nt.ins[0]],wv(D));
+  s+=wire([nt.out,[240,280],[240,n2.ins[1][1]],n2.ins[1]],wv(1-D));
+  s+=wire([[40,200],[220,200]],wv(EN))+dot(220,200,EN)+wire([[220,200],[220,n1.ins[1][1]],n1.ins[1]],wv(EN))+wire([[220,200],[220,n2.ins[0][1]],n2.ins[0]],wv(EN));
+  s+=wire(orth(n1.out,n3.ins[0],400),wv(Sb))+wire(orth(n2.out,n4.ins[1],400),wv(Rb));
+  s+=wire([n3.out,[700,n3.out[1]]],wv(Q))+dot(580,n3.out[1],Q)+wire([[580,n3.out[1]],[580,170],[440,170],[440,n4.ins[0][1]],n4.ins[0]],wv(Q));
+  s+=wire([n4.out,[700,n4.out[1]]],wv(1-Q))+dot(600,n4.out[1],1-Q)+wire([[600,n4.out[1]],[600,200],[460,200],[460,n3.ins[1][1]],n3.ins[1]],wv(1-Q));
+  s+=n1.svg+n2.svg+n3.svg+n4.svg+nt.svg;
+  s+=T(40,84,'D (data) = '+D,'tm small')+T(40,194,'WRITE = '+EN,'tm small')+T(705,n3.out[1]+4,'Q = '+Q,'tm small')+T(705,n4.out[1]+4,'Q̄ = '+(1-Q),'tm small');
+  return {w:W,h:H,svg:s,note:'WRITE = 1 copies D into the cell. WRITE = 0 (shown) and the two crossed NAND gates keep the stored bit.'};
+}
+function view(p){
+  const L=p.length,last=p[L-1],prev=p[L-2],prev2=p[L-3];
+  if(last==='top')return vTop();if(last==='cpu')return vCpu();if(last==='cu')return vCu();if(last==='dec')return vDec();if(last==='alu')return vAlu();if(last==='flags')return vFlags();if(last==='regs')return vRegs();
+  if(UNITS.includes((last||'').toUpperCase()))return vUnit(last.toUpperCase());
+  if(/^fa\d$/.test(last))return vFA(prev.toUpperCase(),+last[2]);
+  if(/^b\d$/.test(last))return vLatch(prev,+last[1]);
+  if(regInfo(last))return vReg8(last);
+  return vCpu();
+}
+function segLabel(g){const M={top:'Microprocessor',cpu:'Inside',cu:'Control unit',dec:'Opcode decoder',alu:'ALU',regs:'Registers',ir:'IR',flags:'Flags'};
+  if(M[g])return M[g];if(UNITS.includes(g.toUpperCase()))return g.toUpperCase()+' unit';if(/^r\d$/.test(g))return 'R'+g[1];if(/^b\d$/.test(g))return 'Bit '+g[1];if(/^fa\d$/.test(g))return 'Full adder '+g[2];return g}
+
+/* ===== Render ===== */
+const $=id=>document.getElementById(id);
+const rich=t=>esc(t).replace(/⟦(.*?)⟧/g,'<code>$1</code>');
+function render(){
+  const v=view(path);
+  $('viewer').innerHTML=`<svg class="sch" viewBox="0 0 ${v.w} ${v.h}" role="img" aria-label="${esc(segLabel(path[path.length-1]))}">${v.svg}</svg>`;
+  $('vnote').textContent=v.note||'';
+  $('crumbs').innerHTML=path.map((g,i)=>(i?'<span>›</span>':'')+`<button data-i="${i}"${i===path.length-1?' aria-current="page"':''}>${esc(segLabel(g))}</button>`).join('');
+  $('up').disabled=path.length<2;
+  $('stages').innerHTML=['LOAD','DECODE','EXECUTE','HALT'].map(x=>`<span class="pill${S.stage===x?' on':''}">${x}</span>`).join('')+`<span class="note">${S.halted?'Halted':S.cur!=null?`Instruction ${S.cur}: ${dis(S.IR)}`:'Idle'}</span>`;
+  if(S.narr){$('nEn').innerHTML=rich(S.narr.en);$('nBn').innerHTML=rich(S.narr.bn)}
+  renderProg();renderRegs();
+  $('flags').innerHTML=FL.map(f=>`<span class="flag${S.F[f]?' on':''}" title="${FLD[f]}">${f}=${S.F[f]}</span>`).join('');
+  $('mlog').innerHTML=S.log.length?S.log.map(x=>`<li><span>${esc(x.i)}</span><span>${bin(x.r)} = <b>${fmt(x.r)}</b> <small class="e">${x.f}</small></span></li>`).join(''):'<li class="e">Results appear here as each instruction runs.</li>';
+}
+function renderProg(){
+  const L=S.prog.length;$('pcount').textContent=`${L}/15`;
+  let h=S.prog.map((p,i)=>{const b=enc(p),cls=S.cur===i?'cur':(S.cur!=null&&i<S.cur)||S.halted?'done':'';
+    return `<li class="${cls}"><span class="ad">${String(i).padStart(2,'0')}</span><span class="bits">${fieldsHTML(b)}</span><span class="mn">${dis(b)}</span><button class="rm" data-rm="${i}" aria-label="Remove instruction ${i}" title="Remove">×</button></li>`}).join('');
+  h+=`<li class="hlt${S.halted?' cur':''}"><span class="ad">${String(L).padStart(2,'0')}</span><span class="bits">${fieldsHTML(0)}</span><span class="mn">HLT (end)</span><span></span></li>`;
+  $('prog').innerHTML=h;$('add').disabled=L>=15;
+}
+function renderRegs(){
+  let h='<tr><th>Reg</th><th>Binary</th><th>Value</th><th>Set</th></tr>';
+  for(let k=0;k<4;k++)h+=`<tr class="${S.changed===k?'flash':''}"><td>R${k}</td><td>${bin(S.R[k])}</td><td>${fmt(S.R[k])}</td><td><input type="number" id="init${k}" min="-128" max="255" value="${S.R[k]>127?S.R[k]-256:S.R[k]}" data-init="${k}" aria-label="Set R${k}"></td></tr>`;
+  h+=`<tr><td>IR</td><td>${bin(S.IR,IW)}</td><td colspan="2">${dis(S.IR)}</td></tr>`;
+  const ae=document.activeElement,fid=ae&&ae.id&&ae.id.startsWith('init')?ae.id:null;
+  $('regs').innerHTML=h;if(fid){const el=$(fid);if(el)el.focus()}
+}
+function renderPreview(){
+  const op=$('fop').value,u=!!UNARY[op];$('frs').disabled=u;
+  const i={op,rd:+$('frd').value,rs:+$('frs').value},b=bin(enc(i),IW);
+  $('preview').innerHTML=`<div class="ribbon"><div class="seg f-op">${b.slice(0,2)}<small>${op}</small></div><div class="seg f-rd">${b.slice(2,4)}<small>R${i.rd}</small></div><div class="seg f-rs">${b.slice(4)}<small>R${i.rs}</small></div></div><p><b class="mono" style="color:var(--ink)">${dis(enc(i))}</b> · ${ISAROWS.find(r=>r[0]===op)[3].replace(/Rd/g,'R'+i.rd).replace('Rs','R'+i.rs)}</p>`;
+}
+function renderIsa(){
+  $('isa').innerHTML='<tr><th>Mnemonic</th><th>Opcode</th><th>Syntax</th><th>Monitor shows</th><th>বাংলা</th><th>Example</th></tr>'+
+    ISAROWS.map(r=>{const ex=r[0]==='HLT'?0:enc({op:r[0],rd:0,rs:1});return `<tr><td class="m">${r[0]}</td><td class="m f-op">${r[1]}</td><td class="mono">${r[2]}</td><td>${r[3]}</td><td class="bnc">${r[4]}</td><td class="mono">${fieldsHTML(ex)} <span style="color:var(--muted)">${dis(ex)}</span></td></tr>`}).join('');
+}
+
+/* ===== Voice ===== */
+let voices=[];
+function loadVoices(){try{voices=speechSynthesis.getVoices()||[]}catch(e){voices=[]}voiceNote()}
+function pickVoice(lang){const p=lang.slice(0,2).toLowerCase();return voices.find(v=>v.lang===lang)||voices.find(v=>(v.lang||'').toLowerCase().startsWith(p))}
+function voiceNote(){const v=$('voice').value;let t='';
+  if(v!=='off'&&!('speechSynthesis' in window))t='This browser has no speech engine. Narration is shown as text.';
+  else if(v==='bn'&&voices.length&&!pickVoice('bn-BD'))t='No Bangla voice is installed on this device. Add a Bengali (bn-BD / bn-IN) voice in your system speech settings.';
+  $('vnoteb').textContent=t}
+function speak(text,lang){return new Promise(res=>{
+  if(!('speechSynthesis' in window))return res();
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text.replace(/⟦.*?⟧/g,'').replace(/\s+/g,' '));u.lang=lang;const v=pickVoice(lang);if(v)u.voice=v;
+    const sp=+$('speed').value;u.rate=sp<800?1.25:sp<1600?1.05:0.95;let done=false;const fin=()=>{if(!done){done=true;res()}};
+    u.onend=fin;u.onerror=fin;setTimeout(fin,4000+text.length*90);speechSynthesis.speak(u)}catch(e){res()}})}
+
+/* ===== Playback ===== */
+let playing=false;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function stopPlay(){playing=false;try{speechSynthesis.cancel()}catch(e){}updBtns()}
+function updBtns(){$('play').textContent=playing?'❚❚ Pause':'▶ Play';$('step').disabled=playing}
+function autoNav(){if(!$('follow').checked)return;if(path.length>2)path=['top','cpu']}
+function doStep(){const n=microStep();if(n)autoNav();render();return n}
+async function narrate(n,wait){const t0=Date.now(),v=$('voice').value;
+  if(v!=='off'&&n){const p=speak(v==='bn'?n.bn:n.en,v==='bn'?'bn-BD':'en-US');if(wait)await p}
+  if(wait){const rest=+$('speed').value-(Date.now()-t0);if(rest>0)await sleep(rest)}}
+async function play(){
+  if(playing){stopPlay();return}
+  if(S.halted)reset();
+  playing=true;updBtns();
+  while(playing&&!S.halted){const n=doStep();await narrate(n,true)}
+  playing=false;updBtns();
+}
+
+/* ===== Events ===== */
+$('play').onclick=play;
+$('step').onclick=()=>{if(S.halted)reset();const n=doStep();narrate(n,false)};
+$('reset').onclick=reset;
+$('voice').onchange=()=>{voiceNote();if($('voice').value==='off')try{speechSynthesis.cancel()}catch(e){}};
+$('up').onclick=()=>{if(path.length>1){path.pop();render()}};
+$('crumbs').onclick=e=>{const b=e.target.closest('button[data-i]');if(b){path=path.slice(0,+b.dataset.i+1);render()}};
+function goFrom(el){const g=el.dataset.go;if(g){$('tip').hidden=true;path.push(g);render();$('viewer').scrollTop=0}}
+function showTip(pin,e){const t=$('tip'),card=$('viewer').parentElement.getBoundingClientRect();t.innerHTML=pin.dataset.tip;t.hidden=false;
+  let X=e.clientX-card.left+14,Y=e.clientY-card.top+14;const tw=t.offsetWidth,th=t.offsetHeight;if(X+tw>card.width-8)X=e.clientX-card.left-tw-14;if(X<8)X=8;if(Y+th>card.height-8)Y=e.clientY-card.top-th-14;t.style.left=X+'px';t.style.top=Y+'px'}
+$('viewer').addEventListener('mousemove',e=>{const p=e.target.closest('.pin');if(p)showTip(p,e);else $('tip').hidden=true});
+$('viewer').addEventListener('mouseleave',()=>{$('tip').hidden=true});
+$('viewer').addEventListener('scroll',()=>{$('tip').hidden=true});
+$('viewer').onclick=e=>{const p=e.target.closest('.pin');if(p){e.stopPropagation();showTip(p,e);return}$('tip').hidden=true;const el=e.target.closest('[data-go]');if(el)goFrom(el)};
+$('viewer').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){const el=e.target.closest('[data-go]');if(el){e.preventDefault();goFrom(el)}}};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&path.length>1&&!/INPUT|SELECT/.test(e.target.tagName)){path.pop();render()}});
+['fop','frd','frs'].forEach(id=>$(id).onchange=renderPreview);
+$('add').onclick=()=>{if(S.prog.length>=15)return;S.prog.push({op:$('fop').value,rd:+$('frd').value,rs:+$('frs').value});reset()};
+$('prog').onclick=e=>{const b=e.target.closest('[data-rm]');if(b){S.prog.splice(+b.dataset.rm,1);reset()}};
+$('sample').onclick=()=>{S.prog=SAMPLE.map(x=>({...x}));reset()};
+$('regs').addEventListener('change',e=>{const k=e.target.dataset.init;if(k!=null){let v=parseInt(e.target.value,10);if(isNaN(v))v=0;v=Math.max(-128,Math.min(255,v));S.R[+k]=v&255;S.init[+k]=v&255;S.changed=+k;render()}});
+if('speechSynthesis' in window){loadVoices();try{speechSynthesis.onvoiceschanged=loadVoices}catch(e){}}
+
+renderIsa();renderPreview();reset();
+</script>
+</body>
+</html>
