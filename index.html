@@ -484,7 +484,8 @@ function vCpu(){
   C+=T(880,460,S.out==null?'—':String(S.out>127?S.out-256:S.out),'mscr','middle')+T(880,479,S.out==null?'no result yet':bin(S.out),'msub','middle')+T(880,493,S.out==null?'':(S.log.length?S.log[S.log.length-1].i:''),'msub','middle')+T(880,521,'MONITOR','lbl','middle');
   let K='';
   K+=cable({pt:[260,75]},P('ir','l'),[],{act:isA('w-in-ir'),ob:20});
-  K+=cable(P('ir','b'),P('cu','t'),[],{act:isA('w-ir-cu'),oa:14,ob:14,txt:[460,144,'opcode, Rd, Rs']});
+  {const s1=P('ir','b').pts,d1=P('cu','t').pts,ac=isA('w-ir-cu');s1.forEach((p,i)=>{K+=wire([[p.x,p.y],[d1[i].x,d1[i].y]],ac?'act':(p.v?'hi':''))});
+   [['opcode',0],['Rd',2],['Rs',4]].forEach(([t,i])=>{K+=T((s1[i].x+s1[i+1].x)/2,143,t,'tm tiny','middle')});}
   K+=cable(P('cu','r'),P('regs','l'),[[630,230],[630,165]],{act:isA('w-cu-reg'),oa:10,ob:10,lab:1});
   const a=pin0('cu','b'),b=pin0('alu','t',0);K+=wire([a,[a[0],340],[b[0],340],b],isA('w-cu-alu')?'act':wv(sub))+T(a[0]-8,326,'SUB (1 wire)','tm tiny','end');
   const cx=g=>g.pts.reduce((s,p)=>s+p.x,0)/g.pts.length,rA=cx(P('regs','b',0)),rB=cx(P('regs','b',1)),aA=cx(P('alu','t',1)),aB=cx(P('alu','t',2));
