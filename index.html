@@ -497,16 +497,24 @@ function vCpu(){
   return {w:W,h:H,svg:s+K+C,note:'Inside the CPU. Wires from a group of pins merge into one cable (the slash shows how many wires) and split again at the next chip. The result also leaves the CPU for the FLAGS chip outside.'};
 }
 function vCu(){
-  const W=900,H=420;let s='';const {m,rd,rs}=cur(),op=S.IR>>4;
-  s+=T(40,30,'IR','tm small muted')+bitRow(40,40,S.IR,IW,32,true);
-  const C=chip({id:'dec',x:40,y:150,w:220,h:110,pins:{t:[[2,'in','opcode','Opcode bit from the IR.',op]],r:[[3,'op','','Becomes 1 only when the opcode matches this line.',op<3?1<<(2-op):0,['HLT line','ADD line','SUB line']]]},label:'OPCODE DECODER',sub:`${bin(op,2)} → ${m}`,go:'dec'});
-  const bx=k=>40+k*34+16;
-  s+=cable({side:'b',pts:[0,1].map(k=>({x:bx(k),y:76,v:(S.IR>>(5-k))&1}))},P('dec','t'),[],{act:isA('w-ir-cu'),oa:14,ob:14,txt:[bx(1)+14,106,'opcode']});
-  s+=cable({side:'b',pts:[2,3,4,5].map(k=>({x:bx(k),y:76,v:(S.IR>>(5-k))&1}))},{pt:[860,104]},[[(bx(3)+bx(4))/2,104]].slice(1),{act:isA('w-cu-reg'),oa:28,txt:[858,96,'Rd, Rs → registers','end']});
-  const ln=P('dec','r').pts,lab=[['HLT','stops the clock'],['ADD','no wire needed: SUB = 0 means add'],['SUB','→ ALU: 0 = add, 1 = subtract']];
-  ln.forEach((p,k)=>{const on=k===op?1:0;s+=wire([[p.x,p.y],[330,p.y]],wv(on))+led(342,p.y,on)+T(356,p.y+5,lab[k][0],'tm'+(on?'':' muted'))+T(400,p.y+5,lab[k][1],'tm tiny')});
-  const sp=ln[2];s+=wire([[sp.x+20,sp.y],[sp.x+20,330],[620,330]],isA('w-cu-alu')?'act':wv(op===2))+dot(sp.x+20,sp.y,op===2?1:0)+T(626,334,'SUB → ALU','tm small');
-  return {w:W,h:H,svg:s+C,note:'Control unit: the decoder turns the 2 opcode bits into one line. Only the SUB line leaves the control unit; the Rd and Rs bits pass straight to the registers.'};
+  const W=900,H=440;let s='';const {m,rd,rs}=cur(),op=S.IR>>4,ac=isA('w-ir-cu');
+  const C=chip({id:'dec',x:200,y:150,w:220,h:110,pins:{t:[[2,'in','opcode','Opcode bit from the IR.',op]],l:[[3,'op','','Becomes 1 only when the opcode matches this line.',op<3?1<<(2-op):0,['HLT line','ADD line','SUB line']]]},label:'OPCODE DECODER',sub:`${bin(op,2)} → ${m}`,go:'dec'});
+  const tp=P('dec','t').pts,xs=[tp[0].x,tp[1].x,520,590,710,780],nm=['op1','op0','Rd1','Rd0','Rs1','Rs0'];
+  s+=T(xs[0]-40,57,'IR','tm small muted','end');
+  xs.forEach((x,k)=>{const i=5-k,b=(S.IR>>i)&1;s+=`<rect class="bitb${b?' one':''}" x="${x-17}" y="34" width="34" height="34" rx="3"/>`+T(x,57,b,'tm '+fld(i,S.IR),'middle')+T(x,26,nm[k],'tm tiny','middle')});
+  // opcode: two straight wires down into the decoder
+  [0,1].forEach(k=>{const b=(S.IR>>(5-k))&1;s+=wire([[xs[k],68],[xs[k],tp[k].y]],ac?'act':wv(b))});
+  s+=T((xs[0]+xs[1])/2,118,'opcode','tm tiny','middle');
+  // Rd, Rs: four straight wires down to the registers
+  [2,3,4,5].forEach(k=>{const b=(S.IR>>(5-k))&1;s+=wire([[xs[k],68],[xs[k],318]],isA('w-cu-reg')?'act':wv(b))+`<path d="M${xs[k]-5},312 L${xs[k]},322 L${xs[k]+5},312" fill="none" stroke="var(--muted)" stroke-width="1.5"/>`});
+  s+=T((xs[2]+xs[3])/2,342,`Rd = R${rd}`,'tm small','middle')+T((xs[4]+xs[5])/2,342,`Rs = R${rs}`,'tm small','middle')+T((xs[2]+xs[5])/2,362,'→ registers (Port A / Port B select)','tm tiny','middle');
+  // decoder outputs go left to their lights
+  const ln=P('dec','l').pts,names=['HLT','ADD','SUB'];
+  ln.forEach((p,k)=>{const on=k===op?1:0;s+=wire([[p.x,p.y],[120,p.y]],wv(on))+led(112,p.y,on)+T(98,p.y+5,names[k],'tm'+(on?'':' muted'),'end')});
+  // only SUB leaves: down and along the bottom, 90° corners, passing below the Rd/Rs wires
+  const sp=ln[2],tx=160,sub=op===2?1:0;s+=dot(tx,sp.y,sub)+wire([[tx,sp.y],[tx,400],[860,400]],isA('w-cu-alu')?'act':wv(sub))+T(860,392,'SUB → ALU (0 = add, 1 = subtract)','tm small','end');
+  s+=T(40,430,'ADD needs no wire: SUB = 0 already means add. HLT stops the clock.','tm tiny');
+  return {w:W,h:H,svg:s+C,note:'Control unit: the 2 opcode bits drop straight into the decoder, which turns on one line. Only SUB leaves for the ALU; the Rd and Rs bits pass straight through to the registers.'};
 }
 function vDec(){
   const op=S.IR>>4,nb=2,W=840,gx=540,gap=60,top=160;let s=T(40,24,`Opcode decoder: ${bin(op,2)} → ${opOf(S.IR)}`,'ttl'),rails='',gates='';
